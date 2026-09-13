@@ -1,5 +1,5 @@
 import express from "express";
-import session from "express-session";
+import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -11,22 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- Session Configuration ----------
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "dev-secret-change-me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  })
-);
-
-// ---------- Static Files ----------
+// ---------- Middleware ----------
+// cookieParser with a secret enables signed cookies (req.signedCookies)
+app.use(cookieParser(process.env.SESSION_SECRET || "dev-secret-change-me"));
 app.use(express.static(path.join(__dirname, "public")));
 
 // ---------- PKCE Helpers ----------
@@ -50,14 +37,22 @@ function generateState() {
   return base64URLEncode(crypto.randomBytes(16));
 }
 
+// Cookie options — shared across all OAuth cookies
+const OAUTH_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+  sameSite: "lax", // required so cookie survives the OAuth redirect back
+  signed: true,    // tamper-proof via cookie-parser secret
+  maxAge: 10 * 60 * 1000, // 10 minutes — enough for the OAuth round-trip
+  path: "/",
+};
+
 // ---------- Routes ----------
 
-// Home page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Privacy policy
 app.get("/privacy", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "privacy.html"));
 });
@@ -67,9 +62,9 @@ app.get("/auth/buffer", (req, res) => {
   const { verifier, challenge } = generatePKCE();
   const state = generateState();
 
-  // Store PKCE verifier + state in session
-  req.session.pkceVerifier = verifier;
-  req.session.oauthState = state;
+  // Store verifier + state in signed cookies
+  res.cookie("oauth_state", state, OAUTH_COOKIE_OPTS);
+  res.cookie("pkce_verifier", verifier, OAUTH_COOKIE_OPTS);
 
   const params = new URLSearchParams({
     client_id: process.env.BUFFER_CLIENT_ID,
@@ -89,19 +84,33 @@ app.get("/auth/buffer", (req, res) => {
 app.get("/auth/buffer/callback", async (req, res) => {
   const { code, state, error } = req.query;
 
-  // Handle user denial or errors
   if (error) {
     return res.status(400).send(`Authorization error: ${error}`);
   }
 
-  // Verify state (CSRF protection)
-  if (!state || state !== req.session.oauthState) {
+  // Read values from signed cookies
+  const storedState = req.signedCookies?.oauth_state;
+  const verifier = req.signedCookies?.pkce_verifier;
+
+  // Debug logging (remove in production)
+  console.log("[callback] state from query:", state);
+  console.log("[callback] state from cookie:", storedState);
+  console.log("[callback] verifier present:", !!verifier);
+  console.log("[callback] all cookies:", Object.keys(req.cookies || {}));
+  console.log(
+    "[callback] all signed cookies:",
+    Object.keys(req.signedCookies || {})
+  );
+
+  // Validate state (CSRF check)
+  if (!state || !storedState || state !== storedState) {
     return res.status(400).send("Invalid state parameter. Please try again.");
   }
 
-  const verifier = req.session.pkceVerifier;
   if (!verifier) {
-    return res.status(400).send("Session expired. Please try again.");
+    return res
+      .status(400)
+      .send("Missing PKCE verifier (cookie expired or blocked). Please try again.");
   }
 
   if (!code) {
@@ -109,7 +118,6 @@ app.get("/auth/buffer/callback", async (req, res) => {
   }
 
   try {
-    // Exchange authorization code for tokens
     const tokenRes = await fetch("https://auth.buffer.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -133,14 +141,22 @@ app.get("/auth/buffer/callback", async (req, res) => {
       });
     }
 
-    // Store tokens in session
-    req.session.accessToken = tokenData.access_token;
-    req.session.refreshToken = tokenData.refresh_token;
-    req.session.tokenExpiry = Date.now() + (tokenData.expires_in || 3600) * 1000;
+    // Store access token in a signed cookie (serverless-safe)
+    res.cookie("access_token", tokenData.access_token, {
+      ...OAUTH_COOKIE_OPTS,
+      maxAge: (tokenData.expires_in || 3600) * 1000,
+    });
 
-    // Clear one-time PKCE data
-    delete req.session.pkceVerifier;
-    delete req.session.oauthState;
+    if (tokenData.refresh_token) {
+      res.cookie("refresh_token", tokenData.refresh_token, {
+        ...OAUTH_COOKIE_OPTS,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      });
+    }
+
+    // Clear one-time OAuth cookies
+    res.clearCookie("oauth_state", { path: "/" });
+    res.clearCookie("pkce_verifier", { path: "/" });
 
     res.redirect("/dashboard");
   } catch (err) {
@@ -151,7 +167,9 @@ app.get("/auth/buffer/callback", async (req, res) => {
 
 // ---------- STEP 3: Protected Dashboard ----------
 app.get("/dashboard", async (req, res) => {
-  if (!req.session.accessToken) {
+  const token = req.signedCookies?.access_token;
+
+  if (!token) {
     return res.redirect("/");
   }
 
@@ -159,7 +177,7 @@ app.get("/dashboard", async (req, res) => {
     const profileRes = await fetch("https://api.buffer.com", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${req.session.accessToken}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -193,10 +211,11 @@ app.get("/dashboard", async (req, res) => {
 
 // ---------- Logout ----------
 app.get("/logout", (req, res) => {
-  req.session.destroy((err) => {
-    if (err) console.error("Session destroy error:", err);
-    res.redirect("/");
-  });
+  res.clearCookie("access_token", { path: "/" });
+  res.clearCookie("refresh_token", { path: "/" });
+  res.clearCookie("oauth_state", { path: "/" });
+  res.clearCookie("pkce_verifier", { path: "/" });
+  res.redirect("/");
 });
 
 // ---------- Start Server ----------
