@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- Session (stores PKCE verifier + tokens) ----------
+// ---------- Session Configuration ----------
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
@@ -19,17 +19,17 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false,       // set true in production behind HTTPS
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 10 * 60 * 1000, // 10 min — long enough for OAuth flow
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   })
 );
 
-// ---------- Static files ----------
+// ---------- Static Files ----------
 app.use(express.static(path.join(__dirname, "public")));
 
-// ---------- PKCE helpers ----------
+// ---------- PKCE Helpers ----------
 function base64URLEncode(buffer) {
   return buffer
     .toString("base64")
@@ -52,7 +52,7 @@ function generateState() {
 
 // ---------- Routes ----------
 
-// Root → serve index.html
+// Home page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -62,12 +62,12 @@ app.get("/privacy", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "privacy.html"));
 });
 
-// ---------- STEP 1: Kick off OAuth — user clicks "Connect to Buffer" ----------
+// ---------- STEP 1: Initiate OAuth ----------
 app.get("/auth/buffer", (req, res) => {
   const { verifier, challenge } = generatePKCE();
   const state = generateState();
 
-  // Store PKCE verifier + state in session (needed on callback)
+  // Store PKCE verifier + state in session
   req.session.pkceVerifier = verifier;
   req.session.oauthState = state;
 
@@ -85,16 +85,16 @@ app.get("/auth/buffer", (req, res) => {
   res.redirect(`https://auth.buffer.com/auth?${params.toString()}`);
 });
 
-// ---------- STEP 2: Buffer redirects back here ----------
+// ---------- STEP 2: Handle OAuth Callback ----------
 app.get("/auth/buffer/callback", async (req, res) => {
   const { code, state, error } = req.query;
 
-  // Handle denial / errors from Buffer
+  // Handle user denial or errors
   if (error) {
     return res.status(400).send(`Authorization error: ${error}`);
   }
 
-  // Verify state to prevent CSRF
+  // Verify state (CSRF protection)
   if (!state || state !== req.session.oauthState) {
     return res.status(400).send("Invalid state parameter. Please try again.");
   }
@@ -109,31 +109,28 @@ app.get("/auth/buffer/callback", async (req, res) => {
   }
 
   try {
-    // Build token exchange body
-    const body = new URLSearchParams({
-      client_id: process.env.BUFFER_CLIENT_ID,
-      redirect_uri: process.env.BUFFER_REDIRECT_URI,
-      code,
-      grant_type: "authorization_code",
-      code_verifier: verifier,
-    });
-
-    // Add client_secret only if this is a Confidential client
-    if (process.env.BUFFER_CLIENT_SECRET) {
-      body.append("client_secret", process.env.BUFFER_CLIENT_SECRET);
-    }
-
-    const tokenRes = await fetch("https://api.buffer.com/1/oauth2/token", {
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch("https://auth.buffer.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
+      body: new URLSearchParams({
+        client_id: process.env.BUFFER_CLIENT_ID,
+        client_secret: process.env.BUFFER_CLIENT_SECRET,
+        redirect_uri: process.env.BUFFER_REDIRECT_URI,
+        code,
+        grant_type: "authorization_code",
+        code_verifier: verifier,
+      }),
     });
 
     const tokenData = await tokenRes.json();
 
     if (!tokenRes.ok) {
       console.error("Token exchange failed:", tokenData);
-      return res.status(400).json({ error: "Token exchange failed", detail: tokenData });
+      return res.status(400).json({
+        error: "Token exchange failed",
+        detail: tokenData,
+      });
     }
 
     // Store tokens in session
@@ -152,16 +149,24 @@ app.get("/auth/buffer/callback", async (req, res) => {
   }
 });
 
-// ---------- STEP 3: Protected dashboard ----------
+// ---------- STEP 3: Protected Dashboard ----------
 app.get("/dashboard", async (req, res) => {
   if (!req.session.accessToken) {
     return res.redirect("/");
   }
 
   try {
-    const profileRes = await fetch("https://api.buffer.com/1/user.json", {
-      headers: { Authorization: `Bearer ${req.session.accessToken}` },
+    const profileRes = await fetch("https://api.buffer.com", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${req.session.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: `{ account { email name } }`,
+      }),
     });
+
     const profile = await profileRes.json();
 
     res.send(`
@@ -171,8 +176,8 @@ app.get("/dashboard", async (req, res) => {
         <title>Dashboard – Buffer App</title>
         <link rel="stylesheet" href="/styles.css" />
       </head>
-      <body>
-        <main>
+      <body class="dashboard-layout">
+        <main class="main-content">
           <h1>Connected ✅</h1>
           <pre>${JSON.stringify(profile, null, 2)}</pre>
           <p><a href="/logout">Disconnect</a></p>
@@ -181,6 +186,7 @@ app.get("/dashboard", async (req, res) => {
       </html>
     `);
   } catch (err) {
+    console.error("Profile fetch error:", err);
     res.status(500).send("Failed to fetch profile from Buffer.");
   }
 });
@@ -193,6 +199,7 @@ app.get("/logout", (req, res) => {
   });
 });
 
+// ---------- Start Server ----------
 app.listen(PORT, () => {
   console.log(`✅ Running at http://localhost:${PORT}`);
 });
