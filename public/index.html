@@ -2,18 +2,157 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Buffer App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Buffer App — Schedule Smarter</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
-  <main>
-    <h1>My Buffer App</h1>
-    <p>Connect your Buffer account to get started.</p>
-    <a class="btn" href="/auth/buffer">Connect to Buffer</a>
-    <p class="small">
-      By connecting you agree to our
-      <a href="/privacy.html">Privacy Policy</a>.
+<body class="landing-page">
+
+  <!-- NAVBAR -->
+  <header class="landing-nav">
+    <div class="landing-nav-inner">
+      <span class="logo">🟦 Buffer App</span>
+      <nav class="landing-nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="/privacy">Privacy</a>
+      </nav>
+      <a class="btn btn-primary btn-sm" href="/auth/buffer">Get Started</a>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-content">
+      <span class="hero-badge">✨ Built on Buffer's API</span>
+      <h1 class="hero-title">
+        Schedule, publish, and analyze —<br />
+        <span class="gradient-text">all in one place.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Connect your Buffer account to manage your content queue, track performance,
+        and grow your audience across every social platform.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="/auth/buffer">
+          Connect to Buffer →
+        </a>
+        <a class="btn btn-outline btn-lg" href="#features">
+          Learn more
+        </a>
+      </div>
+      <p class="hero-note">
+        By connecting you agree to our
+        <a href="/privacy">Privacy Policy</a>.
+      </p>
+    </div>
+
+    <!-- Hero visual (mock preview) -->
+    <div class="hero-visual">
+      <div class="mock-card">
+        <div class="mock-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="mock-header">Your Queue</div>
+        <div class="mock-post">
+          <div class="mock-avatar"></div>
+          <div class="mock-lines">
+            <div class="mock-line w-80"></div>
+            <div class="mock-line w-60"></div>
+          </div>
+          <span class="mock-tag twitter">Twitter</span>
+        </div>
+        <div class="mock-post">
+          <div class="mock-avatar"></div>
+          <div class="mock-lines">
+            <div class="mock-line w-70"></div>
+            <div class="mock-line w-50"></div>
+          </div>
+          <span class="mock-tag linkedin">LinkedIn</span>
+        </div>
+        <div class="mock-post">
+          <div class="mock-avatar"></div>
+          <div class="mock-lines">
+            <div class="mock-line w-90"></div>
+            <div class="mock-line w-40"></div>
+          </div>
+          <span class="mock-tag instagram">Instagram</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <h2 class="section-title">Everything you need to stay consistent</h2>
+    <p class="section-subtitle">
+      A modern dashboard for creators, marketers, and small teams.
     </p>
-  </main>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📝</div>
+        <h3>Smart Scheduling</h3>
+        <p>Plan posts weeks in advance and let Buffer publish them at the perfect time.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Real-time Analytics</h3>
+        <p>Track engagement, reach, and follower growth across every connected channel.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💡</div>
+        <h3>Idea Board</h3>
+        <p>Capture content ideas on the fly and turn them into published posts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔒</div>
+        <h3>Secure OAuth</h3>
+        <p>We use PKCE-protected OAuth 2.0 — we never see or store your password.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="how">
+    <h2 class="section-title">Get started in 3 steps</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h4>Connect your Buffer account</h4>
+        <p>Click "Connect to Buffer" and authorize the app in one click.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h4>Review your queue</h4>
+        <p>See everything scheduled across all your channels in one dashboard.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h4>Publish & grow</h4>
+        <p>Approve, edit, or add new posts — then watch your analytics climb.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>Ready to take control of your content?</h2>
+    <p>Connect your Buffer account in seconds.</p>
+    <a class="btn btn-primary btn-lg" href="/auth/buffer">Connect to Buffer →</a>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="landing-footer">
+    <div class="footer-inner">
+      <span>© 2026 Buffer App. All rights reserved.</span>
+      <nav class="footer-links">
+        <a href="/privacy">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </nav>
+    </div>
+  </footer>
+
 </body>
 </html>
