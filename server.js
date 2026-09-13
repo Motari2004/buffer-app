@@ -13,19 +13,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================================================
-// 1. DATABASE CONNECTION
-// ============================================================
+// ---------- DATABASE ----------
+// Use DIRECT_URL for DDL, DATABASE_URL (pooled) for queries
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 1,
+  max: 1, // serverless-safe
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
 
-// ============================================================
-// 2. AUTO-MIGRATION (runs once per cold start)
-// ============================================================
+const directPool = process.env.DIRECT_URL
+  ? new pg.Pool({
+      connectionString: process.env.DIRECT_URL,
+      max: 1,
+      idleTimeoutMillis: 30000,
+    })
+  : pool;
+
+// ---------- AUTO-MIGRATION ----------
 let dbReady = null;
 
 function initDatabase() {
@@ -33,7 +38,8 @@ function initDatabase() {
 
   dbReady = (async () => {
     try {
-      await pool.query(`
+      // Use direct connection for DDL
+      await directPool.query(`
         CREATE TABLE IF NOT EXISTS buffer_accounts (
           id SERIAL PRIMARY KEY,
           buffer_user_id TEXT UNIQUE NOT NULL,
@@ -48,15 +54,15 @@ function initDatabase() {
         );
       `);
 
-      await pool.query(`
+      await directPool.query(`
         CREATE INDEX IF NOT EXISTS idx_buffer_user_id
         ON buffer_accounts(buffer_user_id);
       `);
 
-      console.log("✅ Database tables ready");
+      console.log("✅ Database ready");
     } catch (err) {
-      console.error("❌ Database init failed:", err.message);
-      dbReady = null; // allow retry on next request
+      console.error("❌ Migration failed:", err.message);
+      dbReady = null;
       throw err;
     }
   })();
@@ -64,27 +70,18 @@ function initDatabase() {
   return dbReady;
 }
 
-// Kick off migration at module load
 await initDatabase();
 
-// ============================================================
-// 3. MIDDLEWARE
-// ============================================================
+// ---------- MIDDLEWARE ----------
 app.use(cookieParser(process.env.SESSION_SECRET || "dev-secret"));
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
-// ============================================================
-// 4. PKCE & STATE HELPERS
-// ============================================================
+// ---------- PKCE HELPERS ----------
 function base64URLEncode(buffer) {
-  return buffer
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
+  return buffer.toString("base64")
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
-
 function generatePKCE() {
   const verifier = base64URLEncode(crypto.randomBytes(32));
   const challenge = base64URLEncode(
@@ -92,7 +89,6 @@ function generatePKCE() {
   );
   return { verifier, challenge };
 }
-
 function generateState() {
   return base64URLEncode(crypto.randomBytes(16));
 }
@@ -102,13 +98,11 @@ const OAUTH_COOKIE_OPTS = {
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax",
   signed: true,
-  maxAge: 10 * 60 * 1000, // 10 minutes
+  maxAge: 10 * 60 * 1000,
   path: "/",
 };
 
-// ============================================================
-// 5. BUFFER API HELPERS
-// ============================================================
+// ---------- BUFFER API ----------
 async function bufferQuery(accessToken, query, variables = {}) {
   const res = await fetch("https://api.buffer.com", {
     method: "POST",
@@ -121,6 +115,7 @@ async function bufferQuery(accessToken, query, variables = {}) {
 
   const data = await res.json();
 
+  // GraphQL always returns HTTP 200 — errors are in the body [citation:1]
   if (data.errors) {
     if (data.errors.some((e) => /unauthorized/i.test(e.message))) {
       const err = new Error("Unauthorized");
@@ -153,21 +148,17 @@ async function refreshBufferToken(refreshToken) {
   return res.json();
 }
 
-// ============================================================
-// 6. ROUTES
-// ============================================================
+// ---------- ROUTES ----------
 
-// Home
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Privacy Policy
 app.get("/privacy", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "privacy.html"));
 });
 
-// ---------- STEP 1: Initiate OAuth ----------
+// STEP 1: Initiate OAuth
 app.get("/auth/buffer", (req, res) => {
   const { verifier, challenge } = generatePKCE();
   const state = generateState();
@@ -179,8 +170,7 @@ app.get("/auth/buffer", (req, res) => {
     client_id: process.env.BUFFER_CLIENT_ID,
     redirect_uri: process.env.BUFFER_REDIRECT_URI,
     response_type: "code",
-    scope:
-      "posts:write posts:read ideas:read ideas:write account:read account:write offline_access",
+    scope: "posts:write posts:read ideas:read ideas:write account:read account:write offline_access",
     state,
     code_challenge: challenge,
     code_challenge_method: "S256",
@@ -190,7 +180,7 @@ app.get("/auth/buffer", (req, res) => {
   res.redirect(`https://auth.buffer.com/auth?${params.toString()}`);
 });
 
-// ---------- STEP 2: OAuth Callback ----------
+// STEP 2: OAuth Callback
 app.get("/auth/buffer/callback", async (req, res) => {
   const { code, state, error } = req.query;
 
@@ -207,7 +197,6 @@ app.get("/auth/buffer/callback", async (req, res) => {
   try {
     await initDatabase();
 
-    // Exchange code for tokens
     const tokenRes = await fetch("https://auth.buffer.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -222,22 +211,17 @@ app.get("/auth/buffer/callback", async (req, res) => {
     });
 
     const tokenData = await tokenRes.json();
-
     if (!tokenRes.ok) {
-      console.error("Token exchange failed:", tokenData);
-      return res
-        .status(400)
-        .json({ error: "Token exchange failed", detail: tokenData });
+      return res.status(400).json({ error: "Token exchange failed", detail: tokenData });
     }
 
-    // Fetch user identity
-    const accountData = await bufferQuery(
-      tokenData.access_token,
-      `query { account { id email name avatar } }`
-    );
+    // Fetch identity to key the record
+    const accountData = await bufferQuery(tokenData.access_token, `
+      query { account { id email name avatar } }
+    `);
     const acct = accountData.account;
 
-    // Upsert into DB
+    // Upsert — save BOTH access_token and refresh_token
     await pool.query(
       `INSERT INTO buffer_accounts
         (buffer_user_id, email, name, avatar, access_token, refresh_token, token_expires_at, updated_at)
@@ -271,12 +255,11 @@ app.get("/auth/buffer/callback", async (req, res) => {
   }
 });
 
-// ---------- STEP 3: Multi-Account Dashboard ----------
+// STEP 3: Dashboard — fetch real data for all accounts
 app.get("/dashboard", async (req, res) => {
   try {
     await initDatabase();
 
-    // 1. Load all connected accounts
     const { rows: accounts } = await pool.query(
       `SELECT buffer_user_id, email, name, avatar, access_token, refresh_token, token_expires_at
        FROM buffer_accounts ORDER BY updated_at DESC`
@@ -286,7 +269,7 @@ app.get("/dashboard", async (req, res) => {
       return res.redirect("/");
     }
 
-    // 2. Refresh expiring tokens (within 5 min)
+    // Refresh tokens expiring within 5 minutes
     const now = Date.now();
     for (const acct of accounts) {
       const expiresAt = new Date(acct.token_expires_at).getTime();
@@ -294,6 +277,7 @@ app.get("/dashboard", async (req, res) => {
         try {
           const refreshed = await refreshBufferToken(acct.refresh_token);
 
+          // CRITICAL: Save the NEW refresh token atomically
           await pool.query(
             `UPDATE buffer_accounts SET
                access_token = $1,
@@ -316,62 +300,74 @@ app.get("/dashboard", async (req, res) => {
       }
     }
 
-    // 3. Fetch Buffer data for each account in parallel
+    // Fetch org, channels, and posts for each account
     const accountData = await Promise.all(
       accounts.map(async (acct) => {
         try {
-          const data = await bufferQuery(
-            acct.access_token,
-            `
-            query {
-              account {
-                id email name avatar
-                organizations {
-                  id name
-                  channels { id name service displayName avatar isDisconnected }
+          // Get organization
+          const orgData = await bufferQuery(acct.access_token, `
+            query { account { organizations { id name } } }
+          `);
+          const org = orgData.account.organizations?.[0];
+          if (!org) {
+            return {
+              bufferUserId: acct.buffer_user_id,
+              email: acct.email,
+              error: "No organization found",
+            };
+          }
+
+          // Fetch channels and scheduled posts in parallel
+          const [channelsData, postsData] = await Promise.all([
+            bufferQuery(acct.access_token, `
+              query GetChannels($orgId: OrganizationId!) {
+                channels(input: { organizationId: $orgId }) {
+                  id name service displayName avatar isDisconnected
                 }
               }
-            }
-          `
-          );
+            `, { orgId: org.id }),
 
-          const orgs = data.account.organizations || [];
-          const channels = orgs.flatMap((o) => o.channels);
+            bufferQuery(acct.access_token, `
+              query GetPosts($orgId: OrganizationId!, $first: Int) {
+                posts(input: {
+                  organizationId: $orgId
+                  filter: { status: [scheduled, sent] }
+                }, first: $first) {
+                  edges {
+                    node { id text status dueAt sentAt channelId }
+                  }
+                }
+              }
+            `, { orgId: org.id, first: 20 }),
+          ]);
+
+          const posts = postsData.posts?.edges?.map(e => e.node) || [];
 
           return {
             bufferUserId: acct.buffer_user_id,
-            email: data.account.email,
-            name: data.account.name,
-            avatar: data.account.avatar,
-            organizations: orgs.map((o) => ({ id: o.id, name: o.name })),
-            channels: channels.map((c) => ({
-              id: c.id,
-              name: c.name || c.displayName,
-              service: c.service,
-              avatar: c.avatar,
-              isDisconnected: c.isDisconnected,
-            })),
+            email: acct.email,
+            name: acct.name,
+            avatar: acct.avatar,
+            organization: org,
+            channels: channelsData.channels || [],
+            posts,
             error: null,
           };
         } catch (err) {
           return {
             bufferUserId: acct.buffer_user_id,
             email: acct.email,
-            name: acct.name,
-            avatar: acct.avatar,
-            organizations: [],
-            channels: [],
             error: err.message,
           };
         }
       })
     );
 
-    // 4. Inject data into HTML
     const pageData = {
       accounts: accountData,
       accountCount: accountData.length,
-      totalChannels: accountData.reduce((s, a) => s + a.channels.length, 0),
+      totalChannels: accountData.reduce((s, a) => s + (a.channels?.length || 0), 0),
+      totalPosts: accountData.reduce((s, a) => s + (a.posts?.length || 0), 0),
       fetchedAt: new Date().toISOString(),
     };
 
@@ -391,32 +387,57 @@ app.get("/dashboard", async (req, res) => {
   }
 });
 
-// ---------- Disconnect One Account ----------
+// Create Post
+app.post("/api/posts", async (req, res) => {
+  try {
+    const { bufferUserId, channelId, text, schedulingType, dueAt } = req.body;
+
+    const { rows } = await pool.query(
+      "SELECT access_token FROM buffer_accounts WHERE buffer_user_id = $1",
+      [bufferUserId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Account not found" });
+
+    const input = {
+      text,
+      channelId,
+      schedulingType: schedulingType || "automatic",
+      mode: schedulingType === "customScheduled" ? "customScheduled" : "addToQueue",
+    };
+    if (schedulingType === "customScheduled" && dueAt) input.dueAt = dueAt;
+
+    const data = await bufferQuery(rows[0].access_token, `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) {
+          ... on PostActionSuccess { post { id text status dueAt } }
+          ... on MutationError { message }
+        }
+      }
+    `, { input });
+
+    const result = data.createPost;
+    if (result.message) return res.status(400).json({ error: result.message });
+    res.json(result.post);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Disconnect
 app.post("/disconnect/:bufferUserId", async (req, res) => {
   try {
-    await pool.query(
-      "DELETE FROM buffer_accounts WHERE buffer_user_id = $1",
-      [req.params.bufferUserId]
-    );
+    await pool.query("DELETE FROM buffer_accounts WHERE buffer_user_id = $1", [req.params.bufferUserId]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ---------- Logout All ----------
 app.get("/logout", async (req, res) => {
-  try {
-    await pool.query("DELETE FROM buffer_accounts");
-  } catch (err) {
-    console.error("Logout error:", err);
-  }
+  await pool.query("DELETE FROM buffer_accounts");
   res.redirect("/");
 });
 
-// ============================================================
-// 7. START SERVER
-// ============================================================
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });

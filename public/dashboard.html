@@ -3,323 +3,121 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dashboard – Buffer App</title>
+  <title>Buffer Dashboard</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="dashboard-layout">
 
-  <!-- ═══════════════ TOPBAR ═══════════════ -->
   <header class="topbar">
     <div class="topbar-left">
-      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
-      <span class="logo">🟦 Buffer App</span>
-    </div>
-    <div class="topbar-center">
-      <input type="search" class="search-bar" placeholder="Search posts, ideas, accounts..." />
+      <span class="logo">🟦 Buffer Dashboard</span>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn" title="Notifications">
-        🔔<span class="badge">3</span>
-      </button>
-      <div class="user-menu">
-        <img src="https://ui-avatars.com/api/?name=User&background=2c4bff&color=fff"
-             alt="User" class="avatar" id="topbarAvatar" />
-      </div>
+      <a href="/auth/buffer" class="btn btn-primary btn-sm">+ Connect Account</a>
+      <a href="/logout" class="btn btn-outline btn-sm">Disconnect All</a>
     </div>
   </header>
 
-  <div class="app-body">
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Your Accounts</h1>
+      <p class="subtitle" id="subtitle">Loading...</p>
+    </div>
 
-    <!-- ═══════════════ SIDEBAR ═══════════════ -->
-    <aside class="sidebar" id="sidebar">
-      <nav class="nav-section">
-        <span class="nav-label">MAIN</span>
-        <a href="/dashboard" class="nav-item active">📊 Dashboard</a>
-        <a href="#" class="nav-item">📝 Posts</a>
-        <a href="#" class="nav-item">⏰ Queue</a>
-        <a href="#" class="nav-item">💡 Ideas</a>
-      </nav>
-      <nav class="nav-section">
-        <span class="nav-label">ANALYTICS</span>
-        <a href="#" class="nav-item">📈 Performance</a>
-        <a href="#" class="nav-item">👥 Audience</a>
-      </nav>
-      <nav class="nav-section">
-        <span class="nav-label">SETTINGS</span>
-        <a href="#" class="nav-item">⚙️ Account</a>
-        <a href="#" class="nav-item">🔌 Integrations</a>
-      </nav>
-      <div class="sidebar-footer">
-        <a href="/logout" class="nav-item logout">🚪 Logout</a>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-label">Connected Accounts</span>
+        <span class="kpi-value" id="kpiAccounts">—</span>
       </div>
-    </aside>
-
-    <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
-    <main class="main-content">
-
-      <!-- Page Header -->
-      <div class="page-header">
-        <div>
-          <h1>Dashboard</h1>
-          <p class="subtitle" id="pageSubtitle">Loading your account...</p>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-outline" onclick="window.location.reload()">↻ Refresh</button>
-          <button class="btn btn-primary" onclick="alert('Create Post feature coming soon')">+ Create Post</button>
-        </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Total Channels</span>
+        <span class="kpi-value" id="kpiChannels">—</span>
       </div>
-
-      <!-- ═══════════════ KPI CARDS ═══════════════ -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <span class="kpi-label">Connected Channels</span>
-          <span class="kpi-value" id="kpiChannels">—</span>
-          <span class="kpi-trend up">Live from Buffer</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Scheduled Posts</span>
-          <span class="kpi-value" id="kpiScheduled">—</span>
-          <span class="kpi-trend up">↑ — this week</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Engagement Rate</span>
-          <span class="kpi-value" id="kpiEngagement">—</span>
-          <span class="kpi-trend up">↑ — this week</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Followers Gained</span>
-          <span class="kpi-value" id="kpiFollowers">—</span>
-          <span class="kpi-trend up">↑ — this week</span>
-        </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Posts in Queue</span>
+        <span class="kpi-value" id="kpiPosts">—</span>
       </div>
+    </div>
 
-      <!-- ═══════════════ CHART + TABLE ROW ═══════════════ -->
-      <div class="content-row">
+    <div id="accountsContainer"></div>
+  </main>
 
-        <!-- Chart Card -->
-        <div class="card chart-card">
-          <div class="card-header">
-            <h3>Posting Activity</h3>
-            <select class="select-sm">
-              <option>Last 7 days</option>
-              <option>Last 30 days</option>
-              <option>Last 90 days</option>
-            </select>
-          </div>
-          <div class="chart-placeholder">
-            <div class="bars">
-              <div class="bar" style="height: 40%"></div>
-              <div class="bar" style="height: 65%"></div>
-              <div class="bar" style="height: 30%"></div>
-              <div class="bar" style="height: 80%"></div>
-              <div class="bar" style="height: 55%"></div>
-              <div class="bar" style="height: 90%"></div>
-              <div class="bar" style="height: 70%"></div>
-            </div>
-            <div class="chart-labels">
-              <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span>
-              <span>Fri</span><span>Sat</span><span>Sun</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Channels Table -->
-        <div class="card table-card">
-          <div class="card-header">
-            <h3>Your Channels</h3>
-            <a href="#" class="link-sm">Manage</a>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Channel</th>
-                <th>Service</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="channelsTableBody">
-              <tr>
-                <td colspan="3" class="loading-cell">Loading channels...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-      </div>
-
-      <!-- ═══════════════ ACTIVITY FEED ═══════════════ -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Recent Activity</h3>
-        </div>
-        <div class="activity-feed" id="activityFeed">
-          <div class="activity-item">
-            <span class="activity-icon">⏳</span>
-            <div>
-              <p><strong>Loading activity...</strong></p>
-              <span class="activity-time">Just now</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ═══════════════ ACCOUNT SUMMARY ═══════════════ -->
-      <div class="card account-card">
-        <div class="card-header">
-          <h3>Account Summary</h3>
-        </div>
-        <div class="account-grid">
-          <div class="account-item">
-            <span class="account-label">Name</span>
-            <span class="account-value" id="accName">—</span>
-          </div>
-          <div class="account-item">
-            <span class="account-label">Email</span>
-            <span class="account-value" id="accEmail">—</span>
-          </div>
-          <div class="account-item">
-            <span class="account-label">Account ID</span>
-            <span class="account-value mono" id="accId">—</span>
-          </div>
-          <div class="account-item">
-            <span class="account-label">Last Synced</span>
-            <span class="account-value" id="accSynced">—</span>
-          </div>
-        </div>
-      </div>
-
-    </main>
-  </div>
-
-  <!-- ═══════════════ DATA INJECTION POINT ═══════════════ -->
   <!-- __INITIAL_DATA__ -->
 
-  <!-- ═══════════════ SCRIPTS ═══════════════ -->
   <script>
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('collapsed');
-    }
-
     function escapeHtml(s) {
-      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;",
-        '"': "&quot;", "'": "&#39;"
+      return String(s ?? "").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
       })[c]);
     }
 
-    // ---------- Hydrate dashboard from server-injected data ----------
-    (function hydrateDashboard() {
+    (function hydrate() {
       const data = window.__INITIAL_DATA__;
-      if (!data) {
-        console.warn("No __INITIAL_DATA__ found — running in mock mode.");
-        return;
-      }
+      if (!data) return;
 
-      // 1. Topbar avatar — initials from account name
-      const topbarAvatar = document.getElementById("topbarAvatar");
-      if (topbarAvatar && data.account?.name) {
-        const initials = data.account.name
-          .split(/[\s._-]+/)
-          .map((p) => p[0])
-          .filter(Boolean)
-          .slice(0, 2)
-          .join("")
-          .toUpperCase();
-        topbarAvatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          initials
-        )}&background=2c4bff&color=fff`;
-      }
+      document.getElementById("subtitle").textContent =
+        `${data.accountCount} account(s) connected · ${data.totalPosts} posts`;
 
-      // 2. Page subtitle
-      const subtitle = document.getElementById("pageSubtitle");
-      if (subtitle && data.account?.email) {
-        subtitle.textContent = `Signed in as ${data.account.email}`;
-      }
+      document.getElementById("kpiAccounts").textContent = data.accountCount;
+      document.getElementById("kpiChannels").textContent = data.totalChannels;
+      document.getElementById("kpiPosts").textContent = data.totalPosts;
 
-      // 3. KPI: connected channels
-      const kpiChannels = document.getElementById("kpiChannels");
-      if (kpiChannels) kpiChannels.textContent = data.channelCount ?? "0";
+      const container = document.getElementById("accountsContainer");
 
-      // 4. Render channels table
-      const tbody = document.getElementById("channelsTableBody");
-      if (tbody) {
-        if (data.channels?.length) {
-          tbody.innerHTML = data.channels
-            .map(
-              (ch) => `
-                <tr>
-                  <td>
-                    <div class="channel-cell">
-                      ${
-                        ch.avatar
-                          ? `<img src="${escapeHtml(ch.avatar)}" alt="" class="channel-avatar" onerror="this.style.display='none'" />`
-                          : ""
-                      }
-                      <span>${escapeHtml(ch.name || "Untitled")}</span>
-                    </div>
-                  </td>
-                  <td><span class="tag ${escapeHtml(
-                    (ch.service || "").toLowerCase()
-                  )}">${escapeHtml(ch.service || "unknown")}</span></td>
-                  <td><span class="status sent">Connected</span></td>
-                </tr>`
-            )
-            .join("");
-        } else {
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="3" class="loading-cell">
-                No channels connected yet. Add one in your Buffer dashboard.
-              </td>
-            </tr>`;
+      container.innerHTML = data.accounts.map(acct => {
+        if (acct.error) {
+          return `
+            <div class="card account-card">
+              <div class="card-header">
+                <h3>${escapeHtml(acct.email)}</h3>
+                <button onclick="disconnect('${escapeHtml(acct.bufferUserId)}')" class="btn btn-outline btn-sm">Remove</button>
+              </div>
+              <p style="color:#ef4444">Error: ${escapeHtml(acct.error)}</p>
+            </div>
+          `;
         }
-      }
 
-      // 5. Activity feed
-      const feed = document.getElementById("activityFeed");
-      if (feed) {
-        const time = new Date(data.fetchedAt || Date.now()).toLocaleTimeString();
-        feed.innerHTML = `
-          <div class="activity-item">
-            <span class="activity-icon">✅</span>
-            <div>
-              <p><strong>Dashboard loaded</strong> — ${data.channelCount} channel(s) synced</p>
-              <span class="activity-time">${escapeHtml(time)}</span>
+        const channelsHtml = acct.channels.map(c => `
+          <span class="tag ${escapeHtml((c.service||"").toLowerCase())}">
+            ${escapeHtml(c.service)}: ${escapeHtml(c.name || c.displayName || "Untitled")}
+            ${c.isDisconnected ? '<em style="color:#ef4444">(disconnected)</em>' : ''}
+          </span>
+        `).join(" ") || '<em style="color:#7a8092">No channels</em>';
+
+        const postsHtml = acct.posts.slice(0, 5).map(p => `
+          <tr>
+            <td>${escapeHtml(p.text?.slice(0, 50) || "(no text)")}</td>
+            <td><span class="status ${p.status === 'sent' ? 'sent' : 'scheduled'}">${escapeHtml(p.status)}</span></td>
+            <td>${p.dueAt ? new Date(p.dueAt).toLocaleDateString() : '—'}</td>
+          </tr>
+        `).join("") || '<tr><td colspan="3" style="text-align:center;color:#7a8092">No posts</td></tr>';
+
+        return `
+          <div class="card account-card" style="margin-bottom:1.5rem">
+            <div class="card-header">
+              <h3>${escapeHtml(acct.name || acct.email)}</h3>
+              <button onclick="disconnect('${escapeHtml(acct.bufferUserId)}')" class="btn btn-outline btn-sm">Remove</button>
             </div>
-          </div>
-          <div class="activity-item">
-            <span class="activity-icon">🔑</span>
-            <div>
-              <p><strong>Authenticated</strong> as ${escapeHtml(
-                data.account?.email || "your account"
-              )}</p>
-              <span class="activity-time">Just now</span>
-            </div>
-          </div>
-          <div class="activity-item">
-            <span class="activity-icon">🔄</span>
-            <div>
-              <p><strong>Token stored</strong> in signed HTTP-only cookie</p>
-              <span class="activity-time">Secure session</span>
-            </div>
+            <p style="color:#7a8092;font-size:0.85rem">${escapeHtml(acct.email)} · Org: ${escapeHtml(acct.organization?.name || "—")}</p>
+
+            <h4 style="margin:1rem 0 0.5rem;font-size:0.85rem;text-transform:uppercase;color:#7a8092">Channels</h4>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem">${channelsHtml}</div>
+
+            <h4 style="margin:1rem 0 0.5rem;font-size:0.85rem;text-transform:uppercase;color:#7a8092">Recent Posts</h4>
+            <table class="data-table">
+              <thead><tr><th>Content</th><th>Status</th><th>Due</th></tr></thead>
+              <tbody>${postsHtml}</tbody>
+            </table>
           </div>
         `;
-      }
-
-      // 6. Account summary
-      const set = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val ?? "—";
-      };
-      set("accName", data.account?.name);
-      set("accEmail", data.account?.email);
-      set("accId", data.account?.id);
-      set(
-        "accSynced",
-        data.fetchedAt ? new Date(data.fetchedAt).toLocaleString() : "—"
-      );
+      }).join("");
     })();
-  </script>
 
+    async function disconnect(id) {
+      if (!confirm("Remove this account?")) return;
+      await fetch(`/disconnect/${encodeURIComponent(id)}`, { method: "POST" });
+      window.location.reload();
+    }
+  </script>
 </body>
 </html>
